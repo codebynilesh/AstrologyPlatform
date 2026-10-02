@@ -1,0 +1,1 @@
+export const brand={name:'Chitra',legalName:'Chitra Astro Technologies',tagline:'Vedic astrology, computed from real starlight.',domain:'chitra.app',colors:{ink:'#17172c',indigo:'#25244a',gold:'#e6bd78',paper:'#f8f5ef'}} as const;

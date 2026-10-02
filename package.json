@@ -1,0 +1,15 @@
+{
+  "name": "chitra-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chitra Vedic astrology platform",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "npm run dev --workspace=@chitra/web",
+    "dev:api": "npm run dev --workspace=@chitra/api",
+    "build": "npm run build --workspace=@chitra/astro && npm run build --workspace=@chitra/api && npm run build --workspace=@chitra/web",
+    "typecheck": "npm run typecheck --workspace=@chitra/astro && npm run typecheck --workspace=@chitra/api && npm run typecheck --workspace=@chitra/web",
+    "test": "npm test --workspace=@chitra/astro"
+  },
+  "engines": { "node": ">=22" }
+}
