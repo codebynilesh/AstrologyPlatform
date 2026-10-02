@@ -1,0 +1,24 @@
+import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import Database from 'better-sqlite3';
+import { z } from 'zod';
+import { calculateChart, calculatePanchang, PLACES, scoreMatch } from '@chitra/astro';
+import { readFileSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const port=Number(process.env.PORT||3000),dbPath=resolve(process.env.DATABASE_PATH||'./data/chitra.db');mkdirSync(dirname(dbPath),{recursive:true});
+const db=new Database(dbPath);db.pragma('journal_mode = WAL');db.exec(`CREATE TABLE IF NOT EXISTS saved_charts(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`);
+const app=new Hono();app.use('*',cors());app.get('/healthz',c=>c.json({status:'ok',service:'Chitra API'}));app.get('/api/v1/geo/presets',c=>c.json(PLACES));
+const birth=z.object({name:z.string().optional(),date:z.string(),time:z.string(),utcOffsetMinutes:z.number(),latitude:z.number(),longitude:z.number()});
+app.post('/api/v1/chart',async c=>{const parsed=birth.safeParse(await c.req.json().catch(()=>null));if(!parsed.success)return c.json({error:'invalid_input',details:parsed.error.flatten()},400);try{return c.json(calculateChart(parsed.data));}catch(e){return c.json({error:'calculation_failed',message:e instanceof Error?e.message:'Could not calculate chart'},422);}});
+app.post('/api/v1/panchang',async c=>{const s=z.object({date:z.string(),utcOffsetMinutes:z.number().default(330)}).safeParse(await c.req.json().catch(()=>null));if(!s.success)return c.json({error:'invalid_input',details:s.error.flatten()},400);try{return c.json(calculatePanchang(s.data.date,s.data.utcOffsetMinutes));}catch(e){return c.json({error:'calculation_failed',message:e instanceof Error?e.message:'Could not calculate panchang'},422);}});
+app.post('/api/v1/match',async c=>{const s=z.object({personA:birth,personB:birth}).safeParse(await c.req.json().catch(()=>null));if(!s.success)return c.json({error:'invalid_input',details:s.error.flatten()},400);try{return c.json(scoreMatch(calculateChart(s.data.personA),calculateChart(s.data.personB)));}catch(e){return c.json({error:'calculation_failed',message:e instanceof Error?e.message:'Could not calculate match'},422);}});
+app.get('/api/v1/charts',c=>c.json(db.prepare('SELECT id,name,created_at as createdAt FROM saved_charts ORDER BY id DESC').all()));
+app.post('/api/v1/charts',async c=>{const s=z.object({name:z.string().min(1).max(100),chart:z.record(z.string(),z.unknown())}).safeParse(await c.req.json().catch(()=>null));if(!s.success)return c.json({error:'invalid_input',details:s.error.flatten()},400);const r=db.prepare('INSERT INTO saved_charts(name,payload) VALUES(?,?)').run(s.data.name,JSON.stringify(s.data.chart));return c.json({id:r.lastInsertRowid,name:s.data.name},201);});
+app.get('/api/v1/openapi.json',c=>c.json({openapi:'3.1.0',info:{title:'Chitra API',version:'1.0.0',description:'Vedic astrology, computed from real starlight. Birth charts, panchang previews and compatibility.', 'x-logo':{url:'/chitra.svg',altText:'Chitra star mark'}},servers:[{url:'/'}],paths:{'/api/v1/chart':{post:{summary:'Calculate a sidereal birth chart'}},'/api/v1/panchang':{post:{summary:'Calculate daily panchang elements'}},'/api/v1/match':{post:{summary:'Preview compatibility kootas (partial result clearly identified)'}},'/api/v1/geo/presets':{get:{summary:'List included example locations'}}}}));
+const webRoot=resolve(dirname(fileURLToPath(import.meta.url)),'../../web/dist');
+app.get('*',serveStatic({root:webRoot,rewriteRequestPath:path=>path==='/'?'/index.html':path}));
+serve({fetch:app.fetch,port,hostname:'0.0.0.0'},info=>console.log(`Chitra API listening on ${info.address}:${info.port}`));
