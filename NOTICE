@@ -1,0 +1,4 @@
+Chitra is an independent astrology software product. Its original source code,
+product copy, interface, and brand assets are developed for Chitra Astro Technologies.
+Astronomical calculations use the astronomy-engine package; see its upstream license
+and package notice when distributing a build that includes it.
